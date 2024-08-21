@@ -17,65 +17,72 @@
 
 import QtQuick 2.15
 import QtGraphicalEffects 1.12
+import "qrc:/qmlutils" as PegasusUtils
 
 Item {
     property var game
 
     visible: game
 
-    readonly property double currentMaxOpacity: game && fanArt(game) && 1.0 || 0.35
-    readonly property string currentSource: {
-        if (!game)
-            return "";
-        return fanArt(game);
-    }
-    onCurrentSourceChanged: delay.restart()
+    readonly property double currentMaxOpacity: game && images.length > 0 && 1.0 || 0.35
+    readonly property var images: fanArt(game)
 
-    states: State {
-        name: "alt"
-        PropertyChanges { target: imgA; opacity: currentMaxOpacity }
-        PropertyChanges { target: imgB; opacity: 0 }
-    }
-    transitions: Transition {
-        NumberAnimation { properties: 'opacity'; duration: 500 }
-    }
+    PegasusUtils.AutoScroll {
+        id: autoScroll
+        anchors.fill: parent
+        scrollWaitDuration: 1000
+        pixelsPerSecond: 15
 
-    Timer {
-        id: delay
-        interval: 200
-        onTriggered: {
-            if (state == "") {
-                imgA.source = currentSource;
-                state = "alt";
-            } else {
-                imgB.source = currentSource;
-                state = "";
+        Column {
+            id: imageColumn
+            width: parent.width
+            height: childrenRect.height
+            spacing: -height * 0.05
+
+            Repeater {
+                id: repeater
+                model: images
+                delegate: Item {
+                    width: parent.width
+                    height: root.height * 0.9
+
+                    Rectangle {
+                        id: screenshotBox
+                        anchors.fill: parent
+                        opacity: 0.5
+                        visible: false
+                        Image {
+                            id: screenshotImage
+                            source: modelData
+                            anchors.fill: parent
+                            fillMode: Image.PreserveAspectCrop
+                            opacity: currentMaxOpacity
+                            antialiasing: true
+                            asynchronous: true
+                            smooth: false
+                        }
+                    }
+
+                    LinearGradient {
+                        id: mask
+                        anchors.fill: screenshotBox
+                        gradient: Gradient {
+                            GradientStop { position: 0.0; color: "transparent" }
+                            GradientStop { position: 0.05; color: "white" }
+                            GradientStop { position: 0.97; color: "white" }
+                            GradientStop { position: 1.0; color: "transparent" }
+                        }
+                        visible: false
+                    }
+
+                    OpacityMask {
+                        anchors.fill: parent
+                        source: screenshotBox
+                        maskSource: mask
+                    }
+                }
             }
         }
-    }
-
-    Image {
-        id: imgA
-        anchors.fill: parent
-        opacity: 0
-        visible: opacity > 0 && source
-
-        sourceSize { width: 512; height: 512 }
-        fillMode: Image.PreserveAspectCrop
-        asynchronous: true
-        smooth: false
-    }
-
-    Image {
-        id: imgB
-        anchors.fill: parent
-        opacity: currentMaxOpacity
-        visible: opacity > 0 && source
-
-        sourceSize { width: 512; height: 512 }
-        fillMode: Image.PreserveAspectCrop
-        asynchronous: true
-        smooth: false
     }
 
     LinearGradient {
@@ -108,21 +115,22 @@ Item {
     }
 
     function fanArt(data) {
+        var images = [];
         if (data != null) {
             if (data.assets.boxFront.includes("/header.jpg"))
-                return steamHero(data);
+                images.push(steamHero(data));
             else {
                 if (data.assets.background != "")
-                    return data.assets.background;
-                else if (data.assets.screenshots[0])
-                    return data.assets.screenshots[0];
-                else if (data.assets.titlescreen[0])
-                    return data.assets.screenshots[0];
+                    images.push(data.assets.background);
+                else if (data.assets.screenshots.length > 0)
+                    images = images.concat(data.assets.screenshots);
+                else if (data.assets.titlescreen.length > 0)
+                    images = images.concat(data.assets.titlescreen);
                 else
                     return ""
             }
         }
-        return "";
+        return images;
     }
 
 }
